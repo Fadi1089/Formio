@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# pnpm local store (e.g. when `store-dir` points inside the repo)
+.pnpm-store/
+
 # Environment files
 .env
 .env.local
@@ -10,6 +13,7 @@ node_modules/
 dist/
 .next/
 out/
+*.tsbuildinfo
 
 # Prisma
 prisma/dev.db
@@ -27,3 +31,7 @@ Thumbs.db
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Docs and Claude
+CLAUDE.md
+doc/
