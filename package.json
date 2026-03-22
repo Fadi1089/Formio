@@ -7,7 +7,8 @@
     "build": "pnpm build:web",
     "build:api": "pnpm --filter ./apps/api run build",
     "build:web": "pnpm --filter ./apps/web run build",
-    "start": "pnpm --filter ./apps/web start"
+    "start": "pnpm --filter ./apps/web start",
+    "prisma:generate": "pnpm --filter ./apps/api exec prisma generate"
   },
   "engines": {
     "node": ">=20",
