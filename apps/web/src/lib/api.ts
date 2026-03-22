@@ -1,5 +1,7 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
+const devTiming = process.env.NODE_ENV === "development";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type QuestionType =
@@ -137,6 +139,7 @@ async function authFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
+  const t0 = devTiming ? performance.now() : 0;
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
@@ -145,6 +148,9 @@ async function authFetch<T>(
       ...(options?.headers ?? {}),
     },
   });
+  if (devTiming) {
+    console.debug(`[web] ${options?.method ?? "GET"} ${path} ${(performance.now() - t0).toFixed(1)}ms`);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? `API error ${res.status}`);
@@ -153,6 +159,7 @@ async function authFetch<T>(
 }
 
 async function publicFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const t0 = devTiming ? performance.now() : 0;
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
@@ -160,6 +167,9 @@ async function publicFetch<T>(path: string, options?: RequestInit): Promise<T> {
       ...(options?.headers ?? {}),
     },
   });
+  if (devTiming) {
+    console.debug(`[web] ${options?.method ?? "GET"} ${path} ${(performance.now() - t0).toFixed(1)}ms`);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? `API error ${res.status}`);
@@ -169,14 +179,26 @@ async function publicFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
+export interface Creator {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+}
+
 export function upsertCreator(
   token: string,
   data: { email: string; name?: string | null; avatarUrl?: string | null }
 ) {
-  return authFetch<{ id: string; email: string }>(token, "/api/v1/auth/me", {
+  return authFetch<Creator>(token, "/api/v1/auth/me", {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export function getCreator(token: string) {
+  return authFetch<Creator>(token, "/api/v1/auth/me");
 }
 
 // ── Forms ─────────────────────────────────────────────────────────────────────

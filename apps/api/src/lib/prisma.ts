@@ -5,6 +5,7 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
+// One PrismaClient per long-lived API process; global guard is for dev hot-reload only.
 export const prisma = global.prisma ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== "production") {

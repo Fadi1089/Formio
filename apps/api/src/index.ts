@@ -2,6 +2,7 @@ import "./loadEnv";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 
+import { prewarmJwks } from "./middleware/auth";
 import authRouter from "./routes/auth";
 import formsRouter from "./routes/forms";
 import sectionsRouter from "./routes/sections";
@@ -42,6 +43,10 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(PORT, () => {
-  console.log(`API running on http://localhost:${PORT}`);
-});
+void prewarmJwks()
+  .catch((err) => console.warn("[api] JWKS prewarm:", err))
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`API running on http://localhost:${PORT}`);
+    });
+  });

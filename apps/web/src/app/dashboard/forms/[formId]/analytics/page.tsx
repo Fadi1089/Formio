@@ -49,9 +49,18 @@ export default async function AnalyticsPage({
           <h1 className="text-xl font-semibold">{form.title}</h1>
           <p className="text-sm text-muted-foreground">Analytics</p>
         </div>
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={`/dashboard/forms/${formId}`}>← Builder</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {analytics.totalResponses > 0 && (
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/api/export/${formId}`} download>
+                Export CSV
+              </a>
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={`/dashboard/forms/${formId}`}>← Builder</Link>
+          </Button>
+        </div>
       </div>
 
       {/* Summary */}

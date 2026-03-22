@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from "express";
-import { createRemoteJWKSet, jwtVerify, decodeProtectedHeader } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
+const devTiming = process.env.NODE_ENV === "development";
 
 // Lazily initialized — env vars are not available until dotenv loads in index.ts.
 let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
@@ -12,6 +14,22 @@ function getJWKS() {
   return _jwks;
 }
 
+/** Fetch JWKS once at startup so the first real request does not pay cold JWKS latency. */
+export async function prewarmJwks(): Promise<void> {
+  const base = process.env.SUPABASE_URL;
+  if (!base) {
+    console.warn("[api] SUPABASE_URL missing; skip JWKS prewarm");
+    return;
+  }
+  const url = `${base}/auth/v1/.well-known/jwks.json`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    console.warn(`[api] JWKS prewarm failed: HTTP ${res.status}`);
+    return;
+  }
+  await res.json();
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
 
@@ -21,17 +39,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   const token = header.slice(7);
-
-  // DEBUG: log alg so we can confirm ES256 is being used
-  try {
-    const { alg } = decodeProtectedHeader(token);
-    console.log("[auth] token alg:", alg);
-  } catch {
-    console.log("[auth] could not decode token header");
-  }
+  const t0 = devTiming ? Date.now() : 0;
 
   jwtVerify(token, getJWKS())
     .then(({ payload }) => {
+      if (devTiming) {
+        console.debug(`[api] jwtVerify ${Date.now() - t0}ms ${req.method} ${req.path}`);
+      }
       if (!payload.sub) {
         res.status(401).json({ error: "Invalid token: missing subject" });
         return;
@@ -39,8 +53,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       req.creatorId = payload.sub;
       next();
     })
-    .catch((err: Error) => {
-      console.error("[auth] jwtVerify failed:", err.name, err.message);
+    .catch(() => {
       res.status(401).json({ error: "Invalid or expired token" });
     });
 }

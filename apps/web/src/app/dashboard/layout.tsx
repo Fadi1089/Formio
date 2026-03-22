@@ -1,8 +1,9 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { SignOutButton } from "./_components/sign-out-button";
+import { UserMenu } from "./_components/user-menu";
 
+// getSession() reads from cookies — no network call, so this stays fast.
+// The proxy already validated the session before this layout runs.
 export default async function DashboardLayout({
   children,
 }: {
@@ -10,10 +11,9 @@ export default async function DashboardLayout({
 }) {
   const supabase = await createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/");
+    data: { session },
+  } = await supabase.auth.getSession();
+  const email = session?.user?.email ?? "";
 
   return (
     <div className="flex min-h-full flex-col">
@@ -22,7 +22,7 @@ export default async function DashboardLayout({
           <Link href="/dashboard" className="text-sm font-semibold">
             Formio
           </Link>
-          <SignOutButton />
+          <UserMenu email={email} />
         </div>
       </header>
 

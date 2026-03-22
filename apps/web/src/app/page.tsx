@@ -9,10 +9,10 @@ export default async function LandingPage({
 }) {
   const supabase = await createClient();
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (user) redirect("/dashboard");
+  if (session) redirect("/dashboard");
 
   const { error } = await searchParams;
 

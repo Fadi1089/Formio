@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+/** Next.js 16+ convention (replaces middleware.ts). Session refresh + dashboard gate. */
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -25,7 +26,8 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session. Do not add logic between createServerClient and getUser().
+  // Required for session refresh — do not add logic between createServerClient
+  // and getUser(). See: https://supabase.com/docs/guides/auth/server-side/nextjs
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -41,6 +43,14 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    /*
+     * Match all paths except:
+     * - _next/static  (static files)
+     * - _next/image   (image optimisation)
+     * - favicon.ico
+     * - image assets
+     * - /f/**         (public form pages — no auth needed, skip getUser() overhead)
+     */
+    "/((?!_next/static|_next/image|favicon\\.ico|f/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

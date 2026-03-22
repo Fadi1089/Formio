@@ -13,9 +13,6 @@ export default async function DashboardPage() {
   } = await supabase.auth.getSession();
   if (!session) redirect("/");
 
-  // DEBUG: confirm a token exists and looks like a JWT (starts with "eyJ")
-  console.log("[dashboard] access_token prefix:", session.access_token?.slice(0, 20));
-
   const { forms } = await getForms(session.access_token);
 
   return (

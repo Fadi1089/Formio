@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useRef } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  createContext,
+  useContext,
+} from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -41,12 +48,16 @@ const CHOICE_TYPES = new Set<QuestionType>([
 
 const SCALE_TYPE: QuestionType = "LINEAR_SCALE";
 
-async function getToken() {
-  const supabase = createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+const FormAccessTokenContext = createContext<(() => Promise<string | null>) | null>(
+  null
+);
+
+function useFormAccessToken() {
+  const fn = useContext(FormAccessTokenContext);
+  if (!fn) {
+    throw new Error("useFormAccessToken must be used within FormBuilder");
+  }
+  return fn;
 }
 
 // ── Add Question Form ─────────────────────────────────────────────────────────
@@ -73,6 +84,7 @@ function AddQuestionForm({
 
   const isChoice = CHOICE_TYPES.has(type);
   const isScale = type === SCALE_TYPE;
+  const getAccessToken = useFormAccessToken();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,7 +94,7 @@ function AddQuestionForm({
     setError(null);
 
     try {
-      const token = await getToken();
+      const token = await getAccessToken();
       if (!token) return;
 
       const input: CreateQuestionInput = {
@@ -258,6 +270,7 @@ function QuestionCard({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const getAccessToken = useFormAccessToken();
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -277,7 +290,7 @@ function QuestionCard({
     setUploadError(null);
 
     try {
-      const token = await getToken();
+      const token = await getAccessToken();
       if (!token) return;
 
       const ext = file.name.split(".").pop() ?? "bin";
@@ -312,7 +325,7 @@ function QuestionCard({
     setUploadError(null);
 
     try {
-      const token = await getToken();
+      const token = await getAccessToken();
       if (!token) return;
 
       await removeMedia(token, question.id);
@@ -432,15 +445,43 @@ export function FormBuilder({ initialForm }: { initialForm: Form }) {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const tokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      tokenRef.current = session?.access_token ?? null;
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      tokenRef.current = session?.access_token ?? null;
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const getAccessToken = useCallback(async () => {
+    if (tokenRef.current) return tokenRef.current;
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const t = session?.access_token ?? null;
+    tokenRef.current = t;
+    return t;
+  }, []);
 
   // Use the first section for new questions (default section always exists).
   const firstSection = form.sections[0];
   const allQuestions = form.sections.flatMap((s) => s.questions);
 
-  const publicUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/f/${form.publicId}`
-      : `/f/${form.publicId}`;
+  const publicPath = `/f/${form.publicId}`;
+  const siteBase =
+    typeof process.env.NEXT_PUBLIC_SITE_URL === "string"
+      ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")
+      : "";
+  // Same string on server and client — never branch on `window` for render.
+  const publicUrl = siteBase ? `${siteBase}${publicPath}` : publicPath;
 
   function handleQuestionAdded(question: Question) {
     setForm((prev) => ({
@@ -471,7 +512,7 @@ export function FormBuilder({ initialForm }: { initialForm: Form }) {
     setPublishError(null);
 
     try {
-      const token = await getToken();
+      const token = await getAccessToken();
       if (!token) return;
 
       if (form.isPublished) {
@@ -491,12 +532,16 @@ export function FormBuilder({ initialForm }: { initialForm: Form }) {
   }
 
   function handleCopyLink() {
-    navigator.clipboard.writeText(publicUrl);
+    const toCopy = siteBase
+      ? publicUrl
+      : `${window.location.origin}${publicPath}`;
+    navigator.clipboard.writeText(toCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
   return (
+    <FormAccessTokenContext.Provider value={getAccessToken}>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -602,5 +647,6 @@ export function FormBuilder({ initialForm }: { initialForm: Form }) {
         )}
       </div>
     </div>
+    </FormAccessTokenContext.Provider>
   );
 }

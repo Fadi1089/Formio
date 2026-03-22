@@ -153,4 +153,73 @@ router.get(
   })
 );
 
+// GET /api/v1/forms/:formId/responses
+// Returns all raw per-response data for CSV export. Owner-only.
+router.get(
+  "/forms/:formId/responses",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { formId } = req.params;
+
+    const form = await prisma.form.findUnique({
+      where: { id: formId },
+      select: { creatorId: true, title: true },
+    });
+    if (!form) {
+      res.status(404).json({ error: "Form not found" });
+      return;
+    }
+    if (form.creatorId !== req.creatorId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const sections = await prisma.section.findMany({
+      where: { formId },
+      orderBy: { order: "asc" },
+      include: {
+        questions: {
+          orderBy: { order: "asc" },
+          select: { id: true, label: true, type: true },
+        },
+      },
+    });
+    const questions = sections.flatMap((s) => s.questions);
+
+    const responses = await prisma.response.findMany({
+      where: { formId },
+      orderBy: { submittedAt: "asc" },
+      include: {
+        answers: {
+          include: {
+            answerOptions: {
+              include: { questionOption: { select: { label: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    res.json({
+      formTitle: form.title,
+      questions: questions.map((q) => ({ id: q.id, label: q.label, type: q.type })),
+      responses: responses.map((r) => ({
+        id: r.id,
+        submittedAt: r.submittedAt.toISOString(),
+        // answers keyed by questionId:
+        //   choice questions → string[] of selected option labels
+        //   all other types  → raw value string (or "" if unanswered)
+        answers: Object.fromEntries(
+          r.answers.map((a) => {
+            if (a.answerOptions.length > 0) {
+              return [a.questionId, a.answerOptions.map((ao) => ao.questionOption.label)];
+            }
+            return [a.questionId, a.value ?? ""];
+          })
+        ),
+      })),
+    });
+  })
+);
+
 export default router;
