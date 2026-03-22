@@ -131,4 +131,77 @@ router.post(
   })
 );
 
+// ── Media attachment ──────────────────────────────────────────────────────────
+
+const MEDIA_TYPES = ["AUDIO", "IMAGE", "VIDEO"] as const;
+
+const attachMediaSchema = z.object({
+  type: z.enum(MEDIA_TYPES),
+  storageKey: z.string().min(1),
+  fileName: z.string().min(1),
+  mimeType: z.string().min(1),
+  durationSeconds: z.number().int().positive().nullable().optional(),
+});
+
+// POST /api/v1/questions/:questionId/media
+// Creates or replaces the media attachment for a question.
+router.post(
+  "/questions/:questionId/media",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const result = attachMediaSchema.safeParse(req.body);
+    if (!result.success) {
+      res.status(400).json({ error: result.error.issues[0]?.message ?? "Invalid body" });
+      return;
+    }
+
+    const question = await prisma.question.findFirst({
+      where: {
+        id: req.params.questionId,
+        section: { form: { creatorId: req.creatorId } },
+      },
+    });
+    if (!question) {
+      res.status(404).json({ error: "Question not found" });
+      return;
+    }
+
+    const { type, storageKey, fileName, mimeType, durationSeconds } = result.data;
+
+    const media = await prisma.mediaAttachment.upsert({
+      where: { questionId: question.id },
+      create: { questionId: question.id, type, storageKey, fileName, mimeType, durationSeconds: durationSeconds ?? null },
+      update: { type, storageKey, fileName, mimeType, durationSeconds: durationSeconds ?? null },
+    });
+
+    res.status(201).json(media);
+  })
+);
+
+// DELETE /api/v1/questions/:questionId/media
+router.delete(
+  "/questions/:questionId/media",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const question = await prisma.question.findFirst({
+      where: {
+        id: req.params.questionId,
+        section: { form: { creatorId: req.creatorId } },
+      },
+      include: { media: true },
+    });
+    if (!question) {
+      res.status(404).json({ error: "Question not found" });
+      return;
+    }
+    if (!question.media) {
+      res.status(404).json({ error: "No media attachment found" });
+      return;
+    }
+
+    await prisma.mediaAttachment.delete({ where: { questionId: question.id } });
+    res.json({ ok: true });
+  })
+);
+
 export default router;
