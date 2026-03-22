@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+// Creator.id is the Supabase Auth UUID — set on first sign-in, no default.
+model Creator {
+  id        String   @id
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  forms Form[]
+}
+
+// ---------------------------------------------------------------------------
+// Forms
+// ---------------------------------------------------------------------------
+
+model Form {
+  id          String    @id @default(cuid())
+  creatorId   String
+  creator     Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  isPublished Boolean   @default(false)
+  // Stable public identifier used in share URLs — decoupled from internal id.
+  publicId    String    @unique @default(cuid())
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sections  Section[]
+  responses Response[]
+
+  @@index([creatorId])
+}
+
+model Section {
+  id        String   @id @default(cuid())
+  formId    String
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  title     String?
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions Question[]
+
+  @@index([formId])
+}
+
+// ---------------------------------------------------------------------------
+// Questions
+// ---------------------------------------------------------------------------
+
+enum QuestionType {
+  SHORT_TEXT
+  LONG_TEXT
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  LINEAR_SCALE
+  DROPDOWN
+  DATE
+  TIME
+}
+
+model Question {
+  id            String       @id @default(cuid())
+  sectionId     String
+  section       Section      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  type          QuestionType
+  label         String
+  description   String?
+  required      Boolean      @default(false)
+  order         Int
+  // Linear scale config — only used when type = LINEAR_SCALE.
+  scaleMin      Int?
+  scaleMax      Int?
+  scaleMinLabel String?
+  scaleMaxLabel String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  options QuestionOption[]
+  media   MediaAttachment?
+  answers Answer[]
+
+  @@index([sectionId])
+}
+
+// Selectable options for SINGLE_CHOICE, MULTIPLE_CHOICE, DROPDOWN questions.
+model QuestionOption {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  label      String
+  order      Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  answerOptions AnswerOption[]
+
+  @@index([questionId])
+}
+
+// ---------------------------------------------------------------------------
+// Media
+// ---------------------------------------------------------------------------
+
+enum MediaType {
+  AUDIO
+  IMAGE
+  VIDEO
+}
+
+// One media attachment per question (enforced via @unique on questionId).
+// storageKey is the Supabase Storage object path — URLs are resolved at runtime.
+// durationSeconds is relevant for AUDIO and VIDEO; null for IMAGE.
+model MediaAttachment {
+  id              String    @id @default(cuid())
+  questionId      String    @unique
+  question        Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  type            MediaType
+  storageKey      String
+  fileName        String
+  mimeType        String
+  durationSeconds Int?
+  createdAt       DateTime  @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Responses & Answers
+// ---------------------------------------------------------------------------
+
+// One Response per anonymous form submission. No respondent identity in MVP.
+model Response {
+  id          String   @id @default(cuid())
+  formId      String
+  form        Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  submittedAt DateTime @default(now())
+
+  answers Answer[]
+
+  @@index([formId])
+  // Composite index for timeline analytics queries (responses per day/week).
+  @@index([formId, submittedAt])
+}
+
+// One Answer per question per response.
+// value stores text, date, time, or linear scale answers as a string.
+// Choice answers are stored via AnswerOption join records instead.
+model Answer {
+  id         String   @id @default(cuid())
+  responseId String
+  response   Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId String
+  // Restrict prevents deleting a question that already has answers,
+  // protecting response data on published forms.
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  value      String?
+
+  answerOptions AnswerOption[]
+
+  @@unique([responseId, questionId])
+  @@index([questionId])
+}
+
+// Stores which QuestionOption(s) were selected in a given Answer.
+// Used for choice distribution analytics: GROUP BY questionOptionId.
+model AnswerOption {
+  id               String         @id @default(cuid())
+  answerId         String
+  answer           Answer         @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  questionOptionId String
+  // Restrict prevents deleting an option that appears in submitted answers.
+  questionOption   QuestionOption @relation(fields: [questionOptionId], references: [id], onDelete: Restrict)
+
+  @@index([answerId])
+  @@index([questionOptionId])
+}
