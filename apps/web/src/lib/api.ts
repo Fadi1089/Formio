@@ -285,6 +285,40 @@ export function createQuestion(
   );
 }
 
+export type UpdateQuestionInput = {
+  label?: string;
+  description?: string | null;
+  required?: boolean;
+  scaleMin?: number | null;
+  scaleMax?: number | null;
+  scaleMinLabel?: string | null;
+  scaleMaxLabel?: string | null;
+  options?: { label: string }[];
+};
+
+export function updateQuestion(
+  token: string,
+  questionId: string,
+  data: UpdateQuestionInput
+) {
+  return authFetch<Question>(token, `/api/v1/questions/${questionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteQuestion(token: string, questionId: string) {
+  return authFetch<{ ok: true }>(token, `/api/v1/questions/${questionId}`, {
+    method: "DELETE",
+  });
+}
+
+export function duplicateQuestion(token: string, questionId: string) {
+  return authFetch<Question>(token, `/api/v1/questions/${questionId}/duplicate`, {
+    method: "POST",
+  });
+}
+
 export function attachMedia(
   token: string,
   questionId: string,

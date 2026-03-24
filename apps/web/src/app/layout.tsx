@@ -26,7 +26,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      // Browser extensions often mutate <html>/<body> before hydration (e.g. rtrvr-* attrs).
+      // Browser extensions often mutate the DOM before hydration (e.g. Retriever rtrvr-* attrs on links and buttons).
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>

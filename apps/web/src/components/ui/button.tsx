@@ -73,13 +73,20 @@ function Button({
         className={classes}
         nativeButton={nativeButton}
         render={child}
+        // Extensions (e.g. Retriever) inject attrs on <a>/<button> before hydration.
+        suppressHydrationWarning
         {...props}
       />
     )
   }
 
   return (
-    <ButtonPrimitive data-slot="button" className={classes} {...props}>
+    <ButtonPrimitive
+      data-slot="button"
+      className={classes}
+      suppressHydrationWarning
+      {...props}
+    >
       {children}
     </ButtonPrimitive>
   )
