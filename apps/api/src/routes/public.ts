@@ -2,6 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
+import {
+  HONEYPOT_FIELD_NAME,
+  MIN_SUBMIT_DELAY_MS,
+  PUBLIC_SUBMIT_ERROR_CODES,
+} from "../config/publicAntiSpam";
+import { signPublicSubmitToken, verifyPublicSubmitToken } from "../lib/publicSubmitToken";
+import { sendPublicSubmitError } from "../lib/publicSubmitErrors";
+import { publicSubmitRateLimiter } from "../middleware/publicSubmitRateLimit";
 
 const router = Router();
 
@@ -44,11 +52,22 @@ router.get(
       return;
     }
 
+    let submitToken: string;
+    try {
+      submitToken = await signPublicSubmitToken(form.publicId);
+    } catch (err) {
+      console.error("[public] submit token signing failed:", err);
+      res.status(500).json({ error: "Server configuration error" });
+      return;
+    }
+
     // Shape: strip internal fields, replace storageKey with a public URL.
     res.json({
       publicId: form.publicId,
       title: form.title,
       description: form.description,
+      submitToken,
+      minSubmitDelayMs: MIN_SUBMIT_DELAY_MS,
       sections: form.sections.map((section) => ({
         id: section.id,
         title: section.title,
@@ -85,22 +104,49 @@ router.get(
 );
 
 // POST /api/v1/public/forms/:publicId/responses
-const submitResponseSchema = z.object({
-  answers: z.array(
-    z.object({
-      questionId: z.string(),
-      value: z.string().optional().nullable(),
-      optionIds: z.array(z.string()).optional(),
-    })
-  ),
-});
+const submitResponseSchema = z
+  .object({
+    submitToken: z.string().min(1),
+    answers: z.array(
+      z.object({
+        questionId: z.string(),
+        value: z.string().optional().nullable(),
+        optionIds: z.array(z.string()).optional(),
+      })
+    ),
+  })
+  .extend({
+    [HONEYPOT_FIELD_NAME]: z.string().optional().default(""),
+  });
 
 router.post(
   "/forms/:publicId/responses",
+  publicSubmitRateLimiter,
   asyncHandler(async (req, res) => {
     const result = submitResponseSchema.safeParse(req.body);
     if (!result.success) {
-      res.status(400).json({ error: result.error.issues[0]?.message ?? "Invalid body" });
+      const issue = result.error.issues[0];
+      const path = issue?.path.join(".");
+      if (path === "submitToken") {
+        sendPublicSubmitError(res, PUBLIC_SUBMIT_ERROR_CODES.INVALID_SUBMIT_TOKEN);
+        return;
+      }
+      res.status(400).json({ error: issue?.message ?? "Invalid body" });
+      return;
+    }
+
+    const honeypot = result.data[HONEYPOT_FIELD_NAME]?.trim() ?? "";
+    if (honeypot.length > 0) {
+      sendPublicSubmitError(res, PUBLIC_SUBMIT_ERROR_CODES.SPAM_DETECTED);
+      return;
+    }
+
+    const tokenCheck = await verifyPublicSubmitToken(
+      result.data.submitToken,
+      req.params.publicId
+    );
+    if (!tokenCheck.ok) {
+      sendPublicSubmitError(res, tokenCheck.code);
       return;
     }
 

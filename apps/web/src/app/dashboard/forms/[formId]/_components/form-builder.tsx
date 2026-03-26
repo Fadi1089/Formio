@@ -23,6 +23,7 @@ import {
   deleteQuestion,
   duplicateQuestion,
   getForm,
+  updateForm,
   publishForm,
   unpublishForm,
   attachMedia,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -579,8 +581,12 @@ function QuestionCard({
               variant="outline"
               onClick={onEdit}
               disabled={duplicatePending || uploading}
+              aria-label="Edit question"
+              title="Edit question"
             >
-              Edit
+              <span className="text-base leading-none" aria-hidden="true">
+                ✎
+              </span>
             </Button>
             <Button
               type="button"
@@ -588,8 +594,12 @@ function QuestionCard({
               variant="outline"
               onClick={() => void onDuplicate()}
               disabled={duplicatePending || uploading}
+              aria-label={duplicatePending ? "Duplicating question" : "Duplicate question"}
+              title={duplicatePending ? "Duplicating question" : "Duplicate question"}
             >
-              {duplicatePending ? "Duplicating…" : "Duplicate"}
+              <span className="text-base leading-none" aria-hidden="true">
+                {duplicatePending ? "…" : "⧉"}
+              </span>
             </Button>
             <Button
               type="button"
@@ -695,12 +705,19 @@ function QuestionCard({
 
 export function FormBuilder({ initialForm }: { initialForm: Form }) {
   const [form, setForm] = useState<Form>(initialForm);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(initialForm.title);
+  const [descriptionDraft, setDescriptionDraft] = useState(initialForm.description ?? "");
+  const [savingMeta, setSavingMeta] = useState(false);
+  const [metaError, setMetaError] = useState<string | null>(null);
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [duplicatePendingId, setDuplicatePendingId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [liveShareUrl, setLiveShareUrl] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -737,7 +754,34 @@ export function FormBuilder({ initialForm }: { initialForm: Form }) {
       ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")
       : "";
   // Same string on server and client — never branch on `window` for render.
+  // Must be the Next.js origin (same host as the dashboard), not NEXT_PUBLIC_API_URL — or links 404 on the API.
   const publicUrl = siteBase ? `${siteBase}${publicPath}` : publicPath;
+
+  useEffect(() => {
+    setLiveShareUrl(`${window.location.origin}${publicPath}`);
+  }, [publicPath]);
+
+  useEffect(() => {
+    setTitleDraft(form.title);
+    setDescriptionDraft(form.description ?? "");
+  }, [form.title, form.description]);
+
+  async function saveFormMeta(input: { title?: string; description?: string | null }) {
+    setSavingMeta(true);
+    setMetaError(null);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const updated = await updateForm(token, form.id, input);
+      setForm((prev) => ({ ...prev, ...updated }));
+      setEditingTitle(false);
+      setEditingDescription(false);
+    } catch (err) {
+      setMetaError(err instanceof Error ? err.message : "Failed to save form details");
+    } finally {
+      setSavingMeta(false);
+    }
+  }
 
   function handleQuestionAdded(question: Question) {
     setForm((prev) => ({
@@ -831,9 +875,13 @@ export function FormBuilder({ initialForm }: { initialForm: Form }) {
   }
 
   function handleCopyLink() {
-    const toCopy = siteBase
-      ? publicUrl
-      : `${window.location.origin}${publicPath}`;
+    // Prefer current origin so copy matches "Open" and works even if NEXT_PUBLIC_SITE_URL points at the API by mistake.
+    const toCopy =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${publicPath}`
+        : siteBase
+          ? publicUrl
+          : publicPath;
     navigator.clipboard.writeText(toCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -843,22 +891,116 @@ export function FormBuilder({ initialForm }: { initialForm: Form }) {
     <FormAccessTokenContext.Provider value={getAccessToken}>
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold truncate">{form.title}</h1>
+      <div className="flex flex-col gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {editingTitle ? (
+              <>
+                <Input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  placeholder="Form name"
+                  className="h-8 w-full"
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  onClick={() => void saveFormMeta({ title: titleDraft.trim() })}
+                  disabled={savingMeta || !titleDraft.trim()}
+                >
+                  {savingMeta ? "Saving…" : "Save"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setTitleDraft(form.title);
+                    setEditingTitle(false);
+                  }}
+                  disabled={savingMeta}
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <h1 className="max-w-full break-words text-xl font-semibold">{form.title}</h1>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditingTitle(true)}
+                  aria-label="Modify name"
+                  title="Modify name"
+                >
+                  <span className="text-base leading-none" aria-hidden="true">
+                    ✎
+                  </span>
+                </Button>
+              </>
+            )}
             <Badge variant={form.isPublished ? "default" : "secondary"}>
               {form.isPublished ? "Published" : "Draft"}
             </Badge>
           </div>
-          {form.description && (
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {form.description}
-            </p>
+          {editingDescription ? (
+            <div className="mt-2 w-full space-y-2">
+              <Textarea
+                value={descriptionDraft}
+                onChange={(e) => setDescriptionDraft(e.target.value)}
+                placeholder="Form description"
+                rows={4}
+                className="w-full"
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    void saveFormMeta({
+                      description: descriptionDraft.trim() ? descriptionDraft : null,
+                    })
+                  }
+                  disabled={savingMeta}
+                >
+                  {savingMeta ? "Saving…" : "Save"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setDescriptionDraft(form.description ?? "");
+                    setEditingDescription(false);
+                  }}
+                  disabled={savingMeta}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-1">
+              {form.description && (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                  {form.description}
+                </p>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => setEditingDescription(true)}
+                aria-label="Modify description"
+                title="Modify description"
+              >
+                <span className="text-base leading-none" aria-hidden="true">
+                  ✎
+                </span>
+              </Button>
+            </div>
           )}
+          {metaError && <p className="mt-2 text-sm text-destructive">{metaError}</p>}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/dashboard" suppressHydrationWarning>
               ← Back
@@ -893,27 +1035,38 @@ export function FormBuilder({ initialForm }: { initialForm: Form }) {
 
       {/* Public link */}
       {form.isPublished && (
-        <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-3">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 p-3">
           <span className="flex-1 truncate text-xs text-muted-foreground">
-            {publicUrl}
+            {liveShareUrl ?? publicUrl}
           </span>
-          <Button size="sm" variant="outline" onClick={handleCopyLink}>
-            {copied ? "Copied!" : "Copy link"}
+          <Button size="sm" variant="outline" onClick={handleCopyLink} aria-label={copied ? "Copied" : "Copy link"} title={copied ? "Copied" : "Copy link"}>
+            <span className="text-base leading-none" aria-hidden="true">
+              {copied ? "✓" : "⎘"}
+            </span>
+            <span className="sr-only">{copied ? "Copied" : "Copy link"}</span>
           </Button>
           <Button size="sm" variant="ghost" asChild>
             <a
-              href={publicUrl}
+              href={publicPath}
               target="_blank"
               rel="noopener noreferrer"
               suppressHydrationWarning
+              aria-label="Open public form"
+              title="Open public form"
             >
-              Open ↗
+              <span className="text-base leading-none" aria-hidden="true">
+                ↗
+              </span>
             </a>
           </Button>
         </div>
       )}
 
       <Separator />
+
+      <p className="text-xs text-muted-foreground">
+        Icon hints: ✎ edit, ⧉ duplicate, ⎘ copy link, ↗ open public form
+      </p>
 
       {/* Questions */}
       <div className="space-y-3">

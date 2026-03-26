@@ -16,7 +16,7 @@ export default async function DashboardLayout({
   const email = session?.user?.email ?? "";
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-full flex-col" suppressHydrationWarning>
       <header className="border-b">
         <div className="mx-auto flex h-12 max-w-4xl items-center justify-between px-4">
           <Link href="/dashboard" className="text-sm font-semibold">

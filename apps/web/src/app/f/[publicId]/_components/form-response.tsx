@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { type PublicForm, type PublicQuestion, type QuestionType, submitResponse } from "@/lib/api";
+import {
+  type PublicForm,
+  type PublicQuestion,
+  type QuestionType,
+  PUBLIC_FORM_HONEYPOT_FIELD,
+  submitResponse,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,6 +172,8 @@ const CHOICE_TYPES = new Set<QuestionType>([
   "DROPDOWN",
 ]);
 
+const SUBMITTED_KEY = (id: string) => `form_submitted_${id}`;
+
 export function FormResponse({
   form,
   publicId,
@@ -177,6 +185,21 @@ export function FormResponse({
   const [answers, setAnswers] = useState<Answers>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [canSubmit, setCanSubmit] = useState(false);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const honeypotRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (localStorage.getItem(SUBMITTED_KEY(publicId))) {
+      setAlreadySubmitted(true);
+    }
+  }, [publicId]);
+
+  useEffect(() => {
+    const delay = form.minSubmitDelayMs;
+    const t = window.setTimeout(() => setCanSubmit(true), delay);
+    return () => window.clearTimeout(t);
+  }, [form.minSubmitDelayMs]);
 
   const allQuestions = form.sections.flatMap((s) => s.questions);
 
@@ -224,7 +247,12 @@ export function FormResponse({
           return { questionId: q.id, value: raw as string };
         });
 
-      await submitResponse(publicId, payload);
+      await submitResponse(publicId, {
+        submitToken: form.submitToken,
+        answers: payload,
+        [PUBLIC_FORM_HONEYPOT_FIELD]: honeypotRef.current?.value ?? "",
+      });
+      localStorage.setItem(SUBMITTED_KEY(publicId), "1");
       router.push(`/f/${publicId}/submitted`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed. Please try again.");
@@ -232,8 +260,32 @@ export function FormResponse({
     }
   }
 
+  if (alreadySubmitted) {
+    return (
+      <div className="rounded-lg border bg-card p-8 text-center space-y-2">
+        <p className="font-medium">You&apos;ve already submitted a response to this form.</p>
+        <p className="text-sm text-muted-foreground">Thank you for your response!</p>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="relative space-y-6">
+      <div
+        className="absolute -left-[9999px] h-px w-px overflow-hidden"
+        aria-hidden="true"
+      >
+        <label htmlFor={`hp-${publicId}`}>Company website</label>
+        <input
+          ref={honeypotRef}
+          id={`hp-${publicId}`}
+          type="text"
+          name={PUBLIC_FORM_HONEYPOT_FIELD}
+          tabIndex={-1}
+          autoComplete="off"
+          defaultValue=""
+        />
+      </div>
       {form.sections.map((section) => (
         <div key={section.id} className="space-y-6">
           {section.title && (
@@ -281,7 +333,7 @@ export function FormResponse({
               </Label>
 
               {question.description && (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
                   {question.description}
                 </p>
               )}
@@ -302,7 +354,7 @@ export function FormResponse({
         </p>
       )}
 
-      <Button type="submit" disabled={submitting} size="lg">
+      <Button type="submit" disabled={submitting || !canSubmit} size="lg">
         {submitting ? "Submitting…" : "Submit"}
       </Button>
     </form>

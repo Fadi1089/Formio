@@ -16,6 +16,11 @@ Copy `.env.example` to `.env` and fill in your values.
 | `DATABASE_URL` | Pooled Supabase Postgres URL (used at runtime) |
 | `DIRECT_URL` | Direct (non-pooled) Supabase Postgres URL (used for migrations) |
 | `PORT` | Port the API listens on (default: `3001`) |
+| `PUBLIC_SUBMIT_TOKEN_SECRET` | Random string (≥32 chars) used to sign public submit JWTs |
+| `PUBLIC_SUBMIT_MIN_DELAY_MS` | Optional. Override minimum milliseconds before submit is accepted (default `5000`). |
+| `TRUST_PROXY` | Optional. Set to `1` or `true` (or a numeric hop count) when behind a reverse proxy so `req.ip` reflects the client for rate limiting |
+
+Public response submissions use a short-lived signed token (issued with each form load), honeypot and minimum-delay checks, and per-IP rate limits. **Rate limiting uses an in-memory store** — if you run multiple API instances, each process tracks its own counts; use a shared store (e.g. Redis) later if you need a strict global cap.
 
 ## Running locally
 

@@ -106,6 +106,10 @@ export interface PublicForm {
   publicId: string;
   title: string;
   description: string | null;
+  /** Short-lived JWT from GET; required to POST a response. */
+  submitToken: string;
+  /** Same value the server encodes in the token’s not-before claim; for UX (e.g. enable submit after delay). */
+  minSubmitDelayMs: number;
   sections: Array<{
     id: string;
     title: string | null;
@@ -172,7 +176,12 @@ async function publicFetch<T>(path: string, options?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? `API error ${res.status}`);
+    const b = body as { error?: string; code?: string };
+    const msg = b.error ?? `API error ${res.status}`;
+    const err = new Error(msg) as Error & { code?: string; status?: number };
+    err.code = b.code;
+    err.status = res.status;
+    throw err;
   }
   return res.json() as Promise<T>;
 }
@@ -355,13 +364,20 @@ export function getPublicForm(publicId: string) {
   return publicFetch<PublicForm>(`/api/v1/public/forms/${publicId}`);
 }
 
+/** Honeypot field name must match API `HONEYPOT_FIELD_NAME` (currently `website`). */
+export const PUBLIC_FORM_HONEYPOT_FIELD = "website" as const;
+
 export function submitResponse(
   publicId: string,
-  answers: Array<{ questionId: string; value?: string | null; optionIds?: string[] }>
+  body: {
+    submitToken: string;
+    answers: Array<{ questionId: string; value?: string | null; optionIds?: string[] }>;
+    [PUBLIC_FORM_HONEYPOT_FIELD]: string;
+  }
 ) {
   return publicFetch<{ responseId: string; submittedAt: string }>(
     `/api/v1/public/forms/${publicId}/responses`,
-    { method: "POST", body: JSON.stringify({ answers }) }
+    { method: "POST", body: JSON.stringify(body) }
   );
 }
 

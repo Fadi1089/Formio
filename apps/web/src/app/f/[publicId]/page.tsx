@@ -21,9 +21,11 @@ export default async function PublicFormPage({
       <div className="mx-auto max-w-2xl px-4 py-12">
         {/* Form header */}
         <div className="mb-8 space-y-1">
-          <h1 className="text-2xl font-semibold">{form.title}</h1>
+          <h1 className="break-words text-2xl font-semibold">{form.title}</h1>
           {form.description && (
-            <p className="text-muted-foreground">{form.description}</p>
+            <p className="text-muted-foreground whitespace-pre-wrap break-words">
+              {form.description}
+            </p>
           )}
         </div>
 

@@ -1,13 +1,4 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-
-export default async function SubmittedPage({
-  params,
-}: {
-  params: Promise<{ publicId: string }>;
-}) {
-  const { publicId } = await params;
-
+export default async function SubmittedPage() {
   return (
     <div className="min-h-full bg-muted/30 flex items-center justify-center">
       <div className="mx-auto max-w-md px-4 py-12 text-center space-y-4">
@@ -16,9 +7,6 @@ export default async function SubmittedPage({
         <p className="text-muted-foreground">
           Your response has been recorded. Thank you!
         </p>
-        <Button variant="outline" asChild>
-          <Link href={`/f/${publicId}`}>Submit another response</Link>
-        </Button>
       </div>
     </div>
   );
