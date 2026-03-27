@@ -37,6 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  NO_RESPONSE: "No response (text block)",
   SHORT_TEXT: "Short text",
   LONG_TEXT: "Long text",
   SINGLE_CHOICE: "Single choice",
@@ -54,7 +55,6 @@ const CHOICE_TYPES = new Set<QuestionType>([
 ]);
 
 const SCALE_TYPE: QuestionType = "LINEAR_SCALE";
-const NO_RESPONSE_OPTION_LABEL = "No response";
 
 const FormAccessTokenContext = createContext<(() => Promise<string | null>) | null>(
   null
@@ -92,9 +92,7 @@ function AddQuestionForm({
 
   const isChoice = CHOICE_TYPES.has(type);
   const isScale = type === SCALE_TYPE;
-  const hasNoResponseOption = options.some(
-    (opt) => opt.trim().toLowerCase() === NO_RESPONSE_OPTION_LABEL.toLowerCase()
-  );
+  const isNoResponse = type === "NO_RESPONSE";
   const getAccessToken = useFormAccessToken();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -111,7 +109,7 @@ function AddQuestionForm({
       const input: CreateQuestionInput = {
         type,
         label: label.trim(),
-        required,
+        required: isNoResponse ? false : required,
         ...(isChoice && {
           options: options.filter((o) => o.trim()).map((o) => ({ label: o.trim() })),
         }),
@@ -195,15 +193,6 @@ function AddQuestionForm({
           >
             + Add option
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={hasNoResponseOption}
-            onClick={() => setOptions([...options, NO_RESPONSE_OPTION_LABEL])}
-          >
-            + Add &quot;No response&quot; option
-          </Button>
         </div>
       )}
 
@@ -230,18 +219,20 @@ function AddQuestionForm({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <input
-          id="q-required"
-          type="checkbox"
-          checked={required}
-          onChange={(e) => setRequired(e.target.checked)}
-          className="h-4 w-4 rounded border-input"
-        />
-        <Label htmlFor="q-required" className="font-normal cursor-pointer">
-          Required
-        </Label>
-      </div>
+      {!isNoResponse && (
+        <div className="flex items-center gap-2">
+          <input
+            id="q-required"
+            type="checkbox"
+            checked={required}
+            onChange={(e) => setRequired(e.target.checked)}
+            className="h-4 w-4 rounded border-input"
+          />
+          <Label htmlFor="q-required" className="font-normal cursor-pointer">
+            Required
+          </Label>
+        </div>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -283,9 +274,7 @@ function EditQuestionForm({
 
   const isChoice = CHOICE_TYPES.has(type);
   const isScale = type === SCALE_TYPE;
-  const hasNoResponseOption = options.some(
-    (opt) => opt.trim().toLowerCase() === NO_RESPONSE_OPTION_LABEL.toLowerCase()
-  );
+  const isNoResponse = type === "NO_RESPONSE";
   const getAccessToken = useFormAccessToken();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -301,7 +290,7 @@ function EditQuestionForm({
 
       const input: UpdateQuestionInput = {
         label: label.trim(),
-        required,
+        required: isNoResponse ? false : required,
         ...(isChoice && {
           options: options.filter((o) => o.trim()).map((o) => ({ label: o.trim() })),
         }),
@@ -386,15 +375,6 @@ function EditQuestionForm({
           >
             + Add option
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={hasNoResponseOption}
-            onClick={() => setOptions([...options, NO_RESPONSE_OPTION_LABEL])}
-          >
-            + Add &quot;No response&quot; option
-          </Button>
         </div>
       )}
 
@@ -421,18 +401,20 @@ function EditQuestionForm({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <input
-          id={`edit-q-required-${question.id}`}
-          type="checkbox"
-          checked={required}
-          onChange={(e) => setRequired(e.target.checked)}
-          className="h-4 w-4 rounded border-input"
-        />
-        <Label htmlFor={`edit-q-required-${question.id}`} className="font-normal cursor-pointer">
-          Required
-        </Label>
-      </div>
+      {!isNoResponse && (
+        <div className="flex items-center gap-2">
+          <input
+            id={`edit-q-required-${question.id}`}
+            type="checkbox"
+            checked={required}
+            onChange={(e) => setRequired(e.target.checked)}
+            className="h-4 w-4 rounded border-input"
+          />
+          <Label htmlFor={`edit-q-required-${question.id}`} className="font-normal cursor-pointer">
+            Required
+          </Label>
+        </div>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

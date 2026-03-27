@@ -66,6 +66,7 @@ model Section {
 // ---------------------------------------------------------------------------
 
 enum QuestionType {
+  NO_RESPONSE
   SHORT_TEXT
   LONG_TEXT
   SINGLE_CHOICE

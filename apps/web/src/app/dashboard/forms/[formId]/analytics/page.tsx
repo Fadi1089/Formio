@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {
+  NO_RESPONSE: "No response (text block)",
   SHORT_TEXT: "Short text",
   LONG_TEXT: "Long text",
   SINGLE_CHOICE: "Single choice",

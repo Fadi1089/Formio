@@ -5,6 +5,7 @@ const devTiming = process.env.NODE_ENV === "development";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type QuestionType =
+  | "NO_RESPONSE"
   | "SHORT_TEXT"
   | "LONG_TEXT"
   | "SINGLE_CHOICE"

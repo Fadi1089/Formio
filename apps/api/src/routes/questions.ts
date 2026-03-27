@@ -8,6 +8,7 @@ import { asyncHandler } from "../lib/asyncHandler";
 const router = Router();
 
 const QUESTION_TYPES = [
+  "NO_RESPONSE",
   "SHORT_TEXT",
   "LONG_TEXT",
   "SINGLE_CHOICE",
@@ -130,6 +131,7 @@ router.post(
     const order = (last?.order ?? -1) + 1;
 
     const { options: rawOptions, ...fields } = result.data;
+    const isNoResponseType = fields.type === "NO_RESPONSE";
 
     const question = await prisma.question.create({
       data: {
@@ -137,13 +139,13 @@ router.post(
         type: fields.type,
         label: fields.label,
         description: fields.description ?? null,
-        required: fields.required,
+        required: isNoResponseType ? false : fields.required,
         order,
         scaleMin: fields.scaleMin ?? null,
         scaleMax: fields.scaleMax ?? null,
         scaleMinLabel: fields.scaleMinLabel ?? null,
         scaleMaxLabel: fields.scaleMaxLabel ?? null,
-        options: rawOptions?.length
+        options: !isNoResponseType && rawOptions?.length
           ? { create: rawOptions.map((o, i) => ({ label: o.label, order: i })) }
           : undefined,
       },
@@ -197,7 +199,9 @@ router.patch(
         const data: Prisma.QuestionUpdateInput = {};
         if (body.label !== undefined) data.label = body.label;
         if (body.description !== undefined) data.description = body.description;
-        if (body.required !== undefined) data.required = body.required;
+        if (body.required !== undefined) {
+          data.required = question.type === "NO_RESPONSE" ? false : body.required;
+        }
         if (body.scaleMin !== undefined) data.scaleMin = body.scaleMin;
         if (body.scaleMax !== undefined) data.scaleMax = body.scaleMax;
         if (body.scaleMinLabel !== undefined) data.scaleMinLabel = body.scaleMinLabel;

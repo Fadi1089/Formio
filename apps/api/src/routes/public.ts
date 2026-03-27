@@ -180,7 +180,7 @@ router.post(
 
     // Every required question must have an answer.
     const answeredIds = new Set(answers.map((a) => a.questionId));
-    for (const question of allQuestions.filter((q) => q.required)) {
+    for (const question of allQuestions.filter((q) => q.required && q.type !== "NO_RESPONSE")) {
       if (!answeredIds.has(question.id)) {
         res.status(422).json({
           error: "Required question not answered",
@@ -193,6 +193,14 @@ router.post(
     // Per-answer validation.
     for (const answer of answers) {
       const question = questionMap.get(answer.questionId)!;
+
+      if (question.type === "NO_RESPONSE") {
+        res.status(422).json({
+          error: "Answers are not allowed for no-response questions",
+          field: answer.questionId,
+        });
+        return;
+      }
 
       if (CHOICE_TYPES.has(question.type)) {
         if (!answer.optionIds || answer.optionIds.length === 0) {

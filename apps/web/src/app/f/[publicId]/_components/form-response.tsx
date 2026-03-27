@@ -33,6 +33,9 @@ function QuestionField({
   const arrValue = Array.isArray(value) ? value : [];
 
   switch (type as QuestionType) {
+    case "NO_RESPONSE":
+      return null;
+
     case "SHORT_TEXT":
       return (
         <Input
@@ -213,6 +216,7 @@ export function FormResponse({
 
     // Client-side required validation
     for (const q of allQuestions) {
+      if (q.type === "NO_RESPONSE") continue;
       if (!q.required) continue;
       const ans = answers[q.id];
       const isChoice = CHOICE_TYPES.has(q.type as QuestionType);
@@ -234,6 +238,7 @@ export function FormResponse({
     try {
       const payload = allQuestions
         .filter((q) => {
+          if (q.type === "NO_RESPONSE") return false;
           const ans = answers[q.id];
           return ans !== undefined && ans !== "" && !(Array.isArray(ans) && ans.length === 0);
         })
@@ -327,7 +332,7 @@ export function FormResponse({
 
               <Label className="text-base font-medium leading-snug">
                 {question.label}
-                {question.required && (
+                {question.required && question.type !== "NO_RESPONSE" && (
                   <span className="ml-1 text-destructive">*</span>
                 )}
               </Label>
