@@ -166,9 +166,8 @@ model Answer {
   responseId String
   response   Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
   questionId String
-  // Restrict prevents deleting a question that already has answers,
-  // protecting response data on published forms.
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  // Cascade allows deleting a question and its related answers.
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   value      String?
 
   answerOptions AnswerOption[]
@@ -184,8 +183,8 @@ model AnswerOption {
   answerId         String
   answer           Answer         @relation(fields: [answerId], references: [id], onDelete: Cascade)
   questionOptionId String
-  // Restrict prevents deleting an option that appears in submitted answers.
-  questionOption   QuestionOption @relation(fields: [questionOptionId], references: [id], onDelete: Restrict)
+  // Cascade allows deleting options when their parent question is removed.
+  questionOption   QuestionOption @relation(fields: [questionOptionId], references: [id], onDelete: Cascade)
 
   @@index([answerId])
   @@index([questionOptionId])

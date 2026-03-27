@@ -244,21 +244,7 @@ router.delete(
       return;
     }
 
-    try {
-      await prisma.question.delete({ where: { id: question.id } });
-    } catch (e) {
-      if (
-        e instanceof Prisma.PrismaClientKnownRequestError &&
-        (e.code === "P2003" || e.code === "P2014")
-      ) {
-        res.status(409).json({
-          error:
-            "Cannot delete a question that already has responses. Unpublish or remove responses first.",
-        });
-        return;
-      }
-      throw e;
-    }
+    await prisma.question.delete({ where: { id: question.id } });
 
     res.json({ ok: true });
   })

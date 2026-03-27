@@ -90,12 +90,12 @@ router.get(
           })),
           media: question.media
             ? {
-                type: question.media.type,
-                url: buildMediaUrl(question.media.storageKey),
-                fileName: question.media.fileName,
-                mimeType: question.media.mimeType,
-                durationSeconds: question.media.durationSeconds,
-              }
+              type: question.media.type,
+              url: buildMediaUrl(question.media.storageKey),
+              fileName: question.media.fileName,
+              mimeType: question.media.mimeType,
+              durationSeconds: question.media.durationSeconds,
+            }
             : null,
         })),
       })),
@@ -222,33 +222,32 @@ router.post(
       }
     }
 
-    // Persist the response and all answers in a single transaction.
-    const response = await prisma.$transaction(async (tx) => {
-      return tx.response.create({
-        data: {
-          formId: form.id,
-          answers: {
-            create: answers.map((answer) => {
-              const question = questionMap.get(answer.questionId)!;
-              const isChoice = CHOICE_TYPES.has(question.type);
-              return {
-                questionId: answer.questionId,
-                value: isChoice ? null : (answer.value ?? null),
-                ...(isChoice && answer.optionIds?.length
-                  ? {
-                      answerOptions: {
-                        create: answer.optionIds.map((id) => ({
-                          questionOptionId: id,
-                        })),
-                      },
-                    }
-                  : {}),
-              };
-            }),
-          },
+    // Persist the response and all answers atomically.
+    // Prisma's nested create is already atomic — no explicit $transaction needed.
+    const response = await prisma.response.create({
+      data: {
+        formId: form.id,
+        answers: {
+          create: answers.map((answer) => {
+            const question = questionMap.get(answer.questionId)!;
+            const isChoice = CHOICE_TYPES.has(question.type);
+            return {
+              questionId: answer.questionId,
+              value: isChoice ? null : (answer.value ?? null),
+              ...(isChoice && answer.optionIds?.length
+                ? {
+                  answerOptions: {
+                    create: answer.optionIds.map((id) => ({
+                      questionOptionId: id,
+                    })),
+                  },
+                }
+                : {}),
+            };
+          }),
         },
-        select: { id: true, submittedAt: true },
-      });
+      },
+      select: { id: true, submittedAt: true },
     });
 
     res.status(201).json({

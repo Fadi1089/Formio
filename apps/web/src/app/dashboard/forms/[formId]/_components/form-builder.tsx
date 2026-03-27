@@ -54,6 +54,7 @@ const CHOICE_TYPES = new Set<QuestionType>([
 ]);
 
 const SCALE_TYPE: QuestionType = "LINEAR_SCALE";
+const NO_RESPONSE_OPTION_LABEL = "No response";
 
 const FormAccessTokenContext = createContext<(() => Promise<string | null>) | null>(
   null
@@ -91,6 +92,9 @@ function AddQuestionForm({
 
   const isChoice = CHOICE_TYPES.has(type);
   const isScale = type === SCALE_TYPE;
+  const hasNoResponseOption = options.some(
+    (opt) => opt.trim().toLowerCase() === NO_RESPONSE_OPTION_LABEL.toLowerCase()
+  );
   const getAccessToken = useFormAccessToken();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -191,6 +195,15 @@ function AddQuestionForm({
           >
             + Add option
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={hasNoResponseOption}
+            onClick={() => setOptions([...options, NO_RESPONSE_OPTION_LABEL])}
+          >
+            + Add &quot;No response&quot; option
+          </Button>
         </div>
       )}
 
@@ -270,6 +283,9 @@ function EditQuestionForm({
 
   const isChoice = CHOICE_TYPES.has(type);
   const isScale = type === SCALE_TYPE;
+  const hasNoResponseOption = options.some(
+    (opt) => opt.trim().toLowerCase() === NO_RESPONSE_OPTION_LABEL.toLowerCase()
+  );
   const getAccessToken = useFormAccessToken();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -369,6 +385,15 @@ function EditQuestionForm({
             onClick={() => setOptions([...options, ""])}
           >
             + Add option
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={hasNoResponseOption}
+            onClick={() => setOptions([...options, NO_RESPONSE_OPTION_LABEL])}
+          >
+            + Add &quot;No response&quot; option
           </Button>
         </div>
       )}
