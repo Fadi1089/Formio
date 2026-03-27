@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
@@ -14,6 +15,7 @@ import { publicSubmitRateLimiter } from "../middleware/publicSubmitRateLimit";
 const router = Router();
 
 const CHOICE_TYPES = new Set(["SINGLE_CHOICE", "MULTIPLE_CHOICE", "DROPDOWN"]);
+const NON_ANSWERABLE_TYPES = new Set(["NO_RESPONSE"]);
 
 // Constructs a public Supabase Storage URL from a storage key.
 // Assumes the "media" bucket is configured as public. The raw storageKey
@@ -180,7 +182,7 @@ router.post(
 
     // Every required question must have an answer.
     const answeredIds = new Set(answers.map((a) => a.questionId));
-    for (const question of allQuestions.filter((q) => q.required && q.type !== "NO_RESPONSE")) {
+    for (const question of allQuestions.filter((q) => q.required && !NON_ANSWERABLE_TYPES.has(String(q.type)))) {
       if (!answeredIds.has(question.id)) {
         res.status(422).json({
           error: "Required question not answered",
@@ -194,7 +196,7 @@ router.post(
     for (const answer of answers) {
       const question = questionMap.get(answer.questionId)!;
 
-      if (question.type === "NO_RESPONSE") {
+      if (NON_ANSWERABLE_TYPES.has(String(question.type))) {
         res.status(422).json({
           error: "Answers are not allowed for no-response questions",
           field: answer.questionId,
@@ -231,31 +233,56 @@ router.post(
     }
 
     // Persist the response and all answers atomically.
-    // Prisma's nested create is already atomic — no explicit $transaction needed.
-    const response = await prisma.response.create({
-      data: {
-        formId: form.id,
-        answers: {
-          create: answers.map((answer) => {
-            const question = questionMap.get(answer.questionId)!;
-            const isChoice = CHOICE_TYPES.has(question.type);
-            return {
-              questionId: answer.questionId,
-              value: isChoice ? null : (answer.value ?? null),
-              ...(isChoice && answer.optionIds?.length
-                ? {
-                  answerOptions: {
-                    create: answer.optionIds.map((id) => ({
-                      questionOptionId: id,
-                    })),
-                  },
-                }
-                : {}),
-            };
-          }),
-        },
-      },
-      select: { id: true, submittedAt: true },
+    // For long forms, createMany batches reduce DB round trips significantly.
+    const response = await prisma.$transaction(async (tx) => {
+      const createdResponse = await tx.response.create({
+        data: { formId: form.id },
+        select: { id: true, submittedAt: true },
+      });
+
+      const answerRows: Array<{
+        id: string;
+        responseId: string;
+        questionId: string;
+        value: string | null;
+      }> = [];
+      const answerOptionRows: Array<{
+        id: string;
+        answerId: string;
+        questionOptionId: string;
+      }> = [];
+
+      for (const answer of answers) {
+        const question = questionMap.get(answer.questionId)!;
+        const isChoice = CHOICE_TYPES.has(question.type);
+        const answerId = randomUUID();
+
+        answerRows.push({
+          id: answerId,
+          responseId: createdResponse.id,
+          questionId: answer.questionId,
+          value: isChoice ? null : (answer.value ?? null),
+        });
+
+        if (isChoice && answer.optionIds?.length) {
+          for (const optionId of answer.optionIds) {
+            answerOptionRows.push({
+              id: randomUUID(),
+              answerId,
+              questionOptionId: optionId,
+            });
+          }
+        }
+      }
+
+      if (answerRows.length > 0) {
+        await tx.answer.createMany({ data: answerRows });
+      }
+      if (answerOptionRows.length > 0) {
+        await tx.answerOption.createMany({ data: answerOptionRows });
+      }
+
+      return createdResponse;
     });
 
     res.status(201).json({

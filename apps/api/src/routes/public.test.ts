@@ -53,19 +53,19 @@ describe("POST /api/v1/public/forms/:publicId/responses", () => {
     await sleep(1200);
 
     prismaMocks.findFirst.mockResolvedValue(formForPublicId(publicId));
-    prismaMocks.transaction.mockImplementation(
-      async (cb: (tx: { response: { create: ReturnType<typeof vi.fn> } }) => Promise<unknown>) => {
-        const tx = {
-          response: {
-            create: vi.fn().mockResolvedValue({
-              id: "r1",
-              submittedAt: new Date(),
-            }),
-          },
-        };
-        return cb(tx);
-      }
-    );
+    prismaMocks.transaction.mockImplementation(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
+      const tx = {
+        response: {
+          create: vi.fn().mockResolvedValue({
+            id: "r1",
+            submittedAt: new Date(),
+          }),
+        },
+        answer: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        answerOption: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      };
+      return cb(tx);
+    });
 
     const res = await request(app)
       .post(`/api/v1/public/forms/${publicId}/responses`)

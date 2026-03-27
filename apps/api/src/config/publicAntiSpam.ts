@@ -6,7 +6,7 @@ function readNonNegativeInt(name: string, fallback: number): number {
 }
 
 /** Minimum time after form load before submit is accepted (server-enforced via JWT `nbf`). Override with `PUBLIC_SUBMIT_MIN_DELAY_MS` (e.g. tests). */
-export const MIN_SUBMIT_DELAY_MS = readNonNegativeInt("PUBLIC_SUBMIT_MIN_DELAY_MS", 5_000);
+export const MIN_SUBMIT_DELAY_MS = readNonNegativeInt("PUBLIC_SUBMIT_MIN_DELAY_MS", 1_000);
 
 /** Stateless submit token lifetime from issue time. */
 export const SUBMIT_TOKEN_TTL_MS = 60 * 60 * 1_000;
